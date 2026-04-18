@@ -1,1 +1,380 @@
+#!/usr/bin/env python3
+
+import geopandas as gpd
+import folium
+import jenkspy
+
+from branca.colormap import StepColormap
+from folium import FeatureGroup
+from folium.features import GeoJson, GeoJsonPopup
+from folium.map import CustomPane
+
+
+NEIGHBORHOODS_GEOJSON_PATH = "/Users/joannasimon/Desktop/Sam_Seattle/Neighborhood_Map_Atlas_Neighborhoods.geojson"
+BLOCKGROUP_GEOJSON_PATH = "/Users/joannasimon/Desktop/Sam_Seattle/CensusBGGEO_2020_B19001_enriched.geojson"
+HIGHWAYS_PATH = "/Users/joannasimon/Desktop/Sam_Seattle/Seattle_Highway_clipped.geojson"
+
+OUTPUT_HTML = "webmap_true_median_income.html"
+
+NEIGHBOR_FIELD = "S_HOOD"
+BG_GEOID_FIELD = "GEOID_20"
+
+INCOME_BINS = [
+    ("HH_LT_10K", 0, 10000),
+    ("HH_10_14K", 10000, 15000),
+    ("HH_15_19K", 15000, 20000),
+    ("HH_20_24K", 20000, 25000),
+    ("HH_25_29K", 25000, 30000),
+    ("HH_30_34K", 30000, 35000),
+    ("HH_35_39K", 35000, 40000),
+    ("HH_40_44K", 40000, 45000),
+    ("HH_45_49K", 45000, 50000),
+    ("HH_50_59K", 50000, 60000),
+    ("HH_60_74K", 60000, 75000),
+    ("HH_75_99K", 75000, 100000),
+    ("HH_100_124K", 100000, 125000),
+    ("HH_125_149K", 125000, 150000),
+    ("HH_150_199K", 150000, 200000),
+    ("HH_200K_PLUS", 200000, 250000),
+]
+
+SEATTLE_CENTER = [47.6062, -122.3321]
+
+
+def load_and_clean_gdf(path, label):
+    gdf = gpd.read_file(path)
+
+    if gdf.empty:
+        raise ValueError(f"{label} file is empty.")
+
+    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
+
+    if gdf.empty:
+        raise ValueError(f"{label} file has no valid geometries.")
+
+    if gdf.crs is None:
+        gdf = gdf.set_crs(epsg=4326)
+    else:
+        gdf = gdf.to_crs(epsg=4326)
+
+    return gdf
+
+
+def parse_number(value):
+    if value is None:
+        return 0.0
+
+    s = str(value).replace(",", "").replace("$", "").strip()
+
+    if s in {"", "-", "None", "null", "NaN"}:
+        return 0.0
+
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def format_currency(x):
+    if x is None:
+        return "No data"
+    return f"${int(round(float(x))):,}"
+
+
+def load_data():
+    neighborhoods = load_and_clean_gdf(
+        NEIGHBORHOODS_GEOJSON_PATH,
+        "Neighborhoods"
+    )
+
+    blockgroups = load_and_clean_gdf(
+        BLOCKGROUP_GEOJSON_PATH,
+        "Blockgroups"
+    )
+
+    highways = load_and_clean_gdf(
+        HIGHWAYS_PATH,
+        "Highways"
+    )
+
+    highways = highways[
+        highways.geometry.type.isin(["LineString", "MultiLineString"])
+    ].copy()
+
+    highways = highways[["geometry"]].copy()
+
+    if highways.empty:
+        raise ValueError("Highways layer is empty after loading.")
+
+    if NEIGHBOR_FIELD not in neighborhoods.columns:
+        raise ValueError(
+            f"Neighborhood field '{NEIGHBOR_FIELD}' not found. "
+            f"Available: {list(neighborhoods.columns)}"
+        )
+
+    if BG_GEOID_FIELD not in blockgroups.columns:
+        raise ValueError(
+            f"Block group GEOID field '{BG_GEOID_FIELD}' not found. "
+            f"Available: {list(blockgroups.columns)}"
+        )
+
+    for col, _, _ in INCOME_BINS:
+        if col not in blockgroups.columns:
+            raise ValueError(f"Missing B19001 column {col}")
+        blockgroups[col] = blockgroups[col].apply(parse_number)
+
+    return neighborhoods, blockgroups, highways
+
+
+def assign_blockgroups_by_largest_overlap(neighborhoods, blockgroups):
+    neighborhoods_proj = neighborhoods.to_crs(26910)
+    blockgroups_proj = blockgroups.to_crs(26910)
+
+    intersections = gpd.overlay(
+        blockgroups_proj,
+        neighborhoods_proj[[NEIGHBOR_FIELD, "geometry"]],
+        how="intersection",
+        keep_geom_type=False
+    )
+
+    if intersections.empty:
+        raise ValueError("No block group / neighborhood overlaps were found.")
+
+    intersections["area"] = intersections.geometry.area
+    intersections = intersections.sort_values(
+        [BG_GEOID_FIELD, "area"],
+        ascending=[True, False]
+    )
+
+    assigned = intersections.drop_duplicates(BG_GEOID_FIELD)
+
+    print("blockgroups matched:", len(assigned), "of", len(blockgroups))
+    return assigned
+
+
+def estimate_median(row):
+    total = sum(float(row[c]) for c, _, _ in INCOME_BINS)
+
+    if total <= 0:
+        return None
+
+    midpoint = total / 2.0
+    cumulative = 0.0
+
+    for col, lo, hi in INCOME_BINS:
+        count = float(row[col])
+        cumulative += count
+
+        if cumulative >= midpoint:
+            return (lo + hi) / 2.0
+
+    return float(INCOME_BINS[-1][2])
+
+
+def compute_neighborhood_medians(assigned):
+    agg_cols = {c: "sum" for c, _, _ in INCOME_BINS}
+
+    grouped = (
+        assigned.groupby(NEIGHBOR_FIELD, dropna=False)
+        .agg(agg_cols)
+        .reset_index()
+    )
+
+    grouped["MEDIAN_HH_INCOME"] = grouped.apply(estimate_median, axis=1)
+    grouped["MEDIAN_HH_INCOME_FMT"] = grouped["MEDIAN_HH_INCOME"].apply(format_currency)
+
+    print(
+        "neighborhood medians computed:",
+        int(grouped["MEDIAN_HH_INCOME"].notna().sum()),
+        "of",
+        len(grouped)
+    )
+
+    return grouped[[NEIGHBOR_FIELD, "MEDIAN_HH_INCOME", "MEDIAN_HH_INCOME_FMT"]]
+
+
+def neighborhood_style(_feature):
+    return {
+        "fill": False,
+        "color": "red",
+        "weight": 0.8,
+        "dashArray": "3,3",
+        "pane": "neighborhoods",
+    }
+
+
+def income_style_factory(colormap):
+    def style(feature):
+        val = feature["properties"].get("MEDIAN_HH_INCOME")
+        return {
+            "fillColor": colormap(val) if val is not None else "#d9d9d9",
+            "color": "#444444",
+            "weight": 0.8,
+            "fillOpacity": 0.75,
+            "pane": "income",
+        }
+    return style
+
+
+def highway_casing_style(_feature):
+    return {
+        "color": "#e6e6e6",
+        "weight": 3.0,
+        "opacity": 0.95,
+        "pane": "highway_casing",
+    }
+
+
+def highway_style(_feature):
+    return {
+        "color": "#f28c28",
+        "weight": 1.6,
+        "opacity": 0.95,
+        "pane": "highways",
+    }
+
+
+def add_panes(m):
+    CustomPane("neighborhoods", 410).add_to(m)
+    CustomPane("income", 420).add_to(m)
+    CustomPane("highway_casing", 640).add_to(m)
+    CustomPane("highways", 650).add_to(m)
+
+
+def add_neighborhood_layer(m, gdf):
+    fg = FeatureGroup("Neighborhoods", show=True).add_to(m)
+
+    gj = GeoJson(
+        gdf.to_json(),
+        style_function=neighborhood_style,
+        popup=GeoJsonPopup(
+            fields=[NEIGHBOR_FIELD],
+            aliases=["Neighborhood:"],
+            labels=True,
+            localize=True,
+            style="""
+                background-color: white;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                box-shadow: 3px;
+            """,
+        ),
+    )
+    gj.add_to(fg)
+
+
+def add_income_layer(m, gdf, breaks, colors):
+    fg = FeatureGroup(
+        "Median Household Income",
+        show=False
+    ).add_to(m)
+
+    breaks = [float(b) for b in breaks]
+
+    colormap = StepColormap(
+        colors=colors,
+        index=breaks,
+        vmin=min(breaks),
+        vmax=max(breaks),
+        caption="Median Household Income (ACS B19001)"
+    )
+
+    gj = GeoJson(
+        gdf.to_json(),
+        style_function=income_style_factory(colormap),
+        popup=GeoJsonPopup(
+            fields=[NEIGHBOR_FIELD, "MEDIAN_HH_INCOME_FMT"],
+            aliases=["Neighborhood:", "Median Household Income:"],
+            labels=True,
+            localize=True,
+            style="""
+                background-color: white;
+                border: 1px solid #333333;
+                border-radius: 4px;
+                box-shadow: 3px;
+            """,
+        ),
+    )
+    gj.add_to(fg)
+
+    colormap.add_to(m)
+
+
+def add_highways_layer(m, gdf):
+    fg = FeatureGroup("Highways", show=False).add_to(m)
+
+    GeoJson(
+        gdf.to_json(),
+        style_function=highway_casing_style
+    ).add_to(fg)
+
+    GeoJson(
+        gdf.to_json(),
+        style_function=highway_style
+    ).add_to(fg)
+
+
+def main():
+    neighborhoods, blockgroups, highways = load_data()
+
+    assigned = assign_blockgroups_by_largest_overlap(
+        neighborhoods,
+        blockgroups
+    )
+
+    medians = compute_neighborhood_medians(assigned)
+
+    final = neighborhoods.merge(
+        medians,
+        on=NEIGHBOR_FIELD,
+        how="left"
+    )
+
+    values = final["MEDIAN_HH_INCOME"].dropna().astype(float).tolist()
+
+    if not values:
+        raise ValueError("No neighborhood income values were computed.")
+
+    unique_count = len(sorted(set(values)))
+    n_classes = min(6, unique_count)
+
+    if n_classes < 2:
+        raise ValueError(
+            f"Not enough unique values for Jenks. Unique values: {unique_count}"
+        )
+
+    breaks = list(map(float, jenkspy.jenks_breaks(values, n_classes=n_classes)))
+
+    print("Jenks breaks:", [round(b, 2) for b in breaks])
+
+    colors_full = [
+        "#ffffd9",
+        "#edf8b1",
+        "#c7e9b4",
+        "#7fcdbb",
+        "#41b6c4",
+        "#225ea8",
+    ]
+    colors = colors_full[:n_classes]
+
+    m = folium.Map(
+        location=SEATTLE_CENTER,
+        zoom_start=11,
+        tiles="cartodbpositron"
+    )
+
+    add_panes(m)
+
+    add_neighborhood_layer(m, neighborhoods)
+    add_income_layer(m, final, breaks, colors)
+    add_highways_layer(m, highways)
+
+    folium.LayerControl(collapsed=False).add_to(m)
+
+    m.save(OUTPUT_HTML)
+    print("saved:", OUTPUT_HTML)
+
+
+if __name__ == "__main__":
+    main()
 
