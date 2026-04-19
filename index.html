@@ -96,7 +96,6 @@
 </head>
 <body>
 
-
     <style>
     .leaflet-bottom.leaflet-right .legend {
         margin-bottom: 20px !important;
@@ -105,6 +104,227 @@
     .legend.leaflet-control {
         font-size: 12px !important;
         line-height: 14px !important;
+    }
+
+    #mapUiWrap {
+        position: fixed;
+        top: 10px;
+        left: 50px;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-width: 420px;
+    }
+
+    #pinToolbar,
+    #mapSearchBox {
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid #b8b8b8;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        padding: 10px 12px;
+    }
+
+    #pinToolbarHeader {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    #pinToolbarActions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+
+    #pinFilterWrap {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: #374151;
+    }
+
+    #pinFilterSelect,
+    #downloadPinsBtn {
+        border: 1px solid #b8b8b8;
+        background: white;
+        color: #374151;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 13px;
+    }
+
+    #downloadPinsBtn {
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    #pinToolbarLabel {
+        font-weight: 700;
+        font-size: 14px;
+    }
+
+    #pinToggleBtn {
+        border: 1px solid #9ca3af;
+        background: white;
+        color: #374151;
+        border-radius: 8px;
+        padding: 4px 10px;
+        font-weight: 700;
+        cursor: pointer;
+    }
+
+    #pinToggleBtn.active {
+        background: #eef2ff;
+        border-color: #6366f1;
+        color: #312e81;
+    }
+
+    #iconChoices {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+    }
+
+    .pinIcon {
+        width: 100%;
+        min-width: 0;
+        height: 52px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        cursor: pointer;
+        font-size: 22px;
+        background: #f8fafc;
+        position: relative;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+    }
+
+    .pinIcon:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 1px 4px rgba(0,0,0,0.14);
+    }
+
+    .pinIcon::after {
+        content: attr(data-label);
+        position: absolute;
+        left: 50%;
+        bottom: calc(100% + 8px);
+        transform: translateX(-50%);
+        background: rgba(17, 24, 39, 0.94);
+        color: white;
+        padding: 5px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        line-height: 1.2;
+        white-space: nowrap;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.12s ease;
+        z-index: 10001;
+    }
+
+    .pinIcon:hover::after,
+    .pinIcon:focus-visible::after {
+        opacity: 1;
+    }
+
+    .pinIcon.selected {
+        border-width: 2px;
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7);
+    }
+
+    .pinIcon[data-icon="cart-shopping"] { color: #f4b400; }
+    .pinIcon[data-icon="plane"] { color: #1f3a5f; }
+    .pinIcon[data-icon="utensils"] { color: #e67e22; }
+    .pinIcon[data-icon="mug-saucer"] { color: #f5b041; }
+    .pinIcon[data-icon="school"] { color: #8e5a2b; }
+    .pinIcon[data-icon="hospital"] { color: #d64541; }
+    .pinIcon[data-icon="tree"] { color: #2e7d32; }
+    .pinIcon[data-icon="train-subway"] { color: #4169e1; }
+    .pinIcon[data-icon="bus"] { color: #1abc9c; }
+    .pinIcon[data-icon="location-dot"] { color: #5d6d7e; }
+
+    .pinIcon[data-icon="cart-shopping"].selected { background: #fff4e5; border-color: #d97706; }
+    .pinIcon[data-icon="plane"].selected { background: #e8f0ff; border-color: #1d4ed8; }
+    .pinIcon[data-icon="utensils"].selected { background: #feeceb; border-color: #dc2626; }
+    .pinIcon[data-icon="mug-saucer"].selected { background: #f8eee8; border-color: #92400e; }
+    .pinIcon[data-icon="school"].selected { background: #f3e8ff; border-color: #7c3aed; }
+    .pinIcon[data-icon="hospital"].selected { background: #e8fff7; border-color: #059669; }
+    .pinIcon[data-icon="tree"].selected { background: #edfced; border-color: #15803d; }
+    .pinIcon[data-icon="train-subway"].selected { background: #eef2f7; border-color: #4b5563; }
+    .pinIcon[data-icon="bus"].selected { background: #fff8db; border-color: #ca8a04; }
+    .pinIcon[data-icon="location-dot"].selected { background: #f3f4f6; border-color: #374151; }
+
+    .custom-pin-circle {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        font-size: 15px;
+        box-shadow: 0 1px 5px rgba(0,0,0,0.35);
+        border: 2px solid rgba(255,255,255,0.95);
+    }
+
+    .custom-pin-circle i {
+        line-height: 1;
+    }
+
+    #mapSearchForm {
+        display: flex;
+        gap: 8px;
+    }
+
+    #mapSearchInput {
+        flex: 1;
+        min-width: 220px;
+        border: 1px solid #b8b8b8;
+        border-radius: 8px;
+        padding: 6px 10px;
+        font-size: 14px;
+    }
+
+    #mapSearchBtn {
+        border: 1px solid #888;
+        background: white;
+        border-radius: 8px;
+        padding: 6px 10px;
+        cursor: pointer;
+        font-weight: 600;
+    }
+
+    #mapSearchStatus {
+        font-size: 12px;
+        color: #555;
+        margin-top: 6px;
+        min-height: 16px;
+    }
+
+    @media (max-width: 640px) {
+        #mapUiWrap {
+            left: 10px;
+            right: 10px;
+            max-width: none;
+        }
+
+        #iconChoices {
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+        }
+
+        #mapSearchInput {
+            min-width: 0;
+        }
     }
     </style>
 
@@ -133,6 +353,54 @@
     })();
     </script>
 
+
+    <div id="mapUiWrap">
+        <div id="mapSearchBox">
+            <form id="mapSearchForm">
+                <input id="mapSearchInput" type="text" placeholder="Search address or place" aria-label="Search address or place">
+                <button id="mapSearchBtn" type="submit">Search</button>
+            </form>
+            <div id="mapSearchStatus"></div>
+        </div>
+
+        <div id="pinToolbar">
+            <div id="pinToolbarHeader">
+                <span id="pinToolbarLabel">Add pins:</span>
+                <button id="pinToggleBtn" type="button">OFF</button>
+            </div>
+            <div id="pinToolbarActions">
+                <label id="pinFilterWrap" for="pinFilterSelect">
+                    <span>Filter:</span>
+                    <select id="pinFilterSelect" aria-label="Filter pins by category">
+                        <option value="all">All categories</option>
+                        <option value="cart-shopping">Grocery Store</option>
+                        <option value="plane">Airport</option>
+                        <option value="utensils">Restaurant</option>
+                        <option value="mug-saucer">Coffee Shop</option>
+                        <option value="school">School</option>
+                        <option value="hospital">Hospital</option>
+                        <option value="tree">Park</option>
+                        <option value="train-subway">Train Station</option>
+                        <option value="bus">Bus Stop</option>
+                        <option value="location-dot">Other</option>
+                    </select>
+                </label>
+                <button id="downloadPinsBtn" type="button">Download CSV</button>
+            </div>
+            <div id="iconChoices">
+                <button class="pinIcon" type="button" data-icon="cart-shopping" data-label="Grocery Store" aria-label="Grocery Store"><i class="fa-solid fa-cart-shopping"></i></button>
+                <button class="pinIcon" type="button" data-icon="plane" data-label="Airport" aria-label="Airport"><i class="fa-solid fa-plane"></i></button>
+                <button class="pinIcon" type="button" data-icon="utensils" data-label="Restaurant" aria-label="Restaurant"><i class="fa-solid fa-utensils"></i></button>
+                <button class="pinIcon" type="button" data-icon="mug-saucer" data-label="Coffee Shop" aria-label="Coffee Shop"><i class="fa-solid fa-mug-saucer"></i></button>
+                <button class="pinIcon" type="button" data-icon="school" data-label="School" aria-label="School"><i class="fa-solid fa-school"></i></button>
+                <button class="pinIcon" type="button" data-icon="hospital" data-label="Hospital" aria-label="Hospital"><i class="fa-solid fa-hospital"></i></button>
+                <button class="pinIcon" type="button" data-icon="tree" data-label="Park" aria-label="Park"><i class="fa-solid fa-tree"></i></button>
+                <button class="pinIcon" type="button" data-icon="train-subway" data-label="Train Station" aria-label="Train Station"><i class="fa-solid fa-train-subway"></i></button>
+                <button class="pinIcon" type="button" data-icon="bus" data-label="Bus Stop" aria-label="Bus Stop"><i class="fa-solid fa-bus"></i></button>
+                <button class="pinIcon" type="button" data-icon="location-dot" data-label="Other" aria-label="Other"><i class="fa-solid fa-location-dot"></i></button>
+            </div>
+        </div>
+    </div>
 
             <div class="folium-map" id="map_78eea8d4781fb263edd4cb8ea27b345a" ></div>
 
@@ -2217,163 +2485,309 @@
 
 
 
+(function() {
+    var map = map_78eea8d4781fb263edd4cb8ea27b345a;
+    var STORAGE_KEY = "seattle_map_user_pins_v4";
+    var pinMode = false;
+    var selectedIcon = "cart-shopping";
+    var activeFilter = "all";
+    var allPins = [];
+    var userPinsLayer = L.featureGroup().addTo(map);
+    var searchForm = document.getElementById("mapSearchForm");
+    var searchInput = document.getElementById("mapSearchInput");
+    var searchStatus = document.getElementById("mapSearchStatus");
+    var searchResultMarker = null;
+    var filterSelect = document.getElementById("pinFilterSelect");
+    var downloadPinsBtn = document.getElementById("downloadPinsBtn");
+    var ICON_CONFIG = {
+        "cart-shopping": { label: "Grocery Store", color: "#f4b400" },
+        "plane": { label: "Airport", color: "#1f3a5f" },
+        "utensils": { label: "Restaurant", color: "#e67e22" },
+        "mug-saucer": { label: "Coffee Shop", color: "#f5b041" },
+        "school": { label: "School", color: "#8e5a2b" },
+        "hospital": { label: "Hospital", color: "#d64541" },
+        "tree": { label: "Park", color: "#2e7d32" },
+        "train-subway": { label: "Train Station", color: "#4169e1" },
+        "bus": { label: "Bus Stop", color: "#1abc9c" },
+        "location-dot": { label: "Other", color: "#5d6d7e" }
+    };
 
-            var user_pins_layer = L.featureGroup().addTo(map_78eea8d4781fb263edd4cb8ea27b345a);
-            var USER_PINS_STORAGE_KEY = "seattle_map_user_pins";
-            var pinAddMode = false;
+    function escapeHtml(value) {
+        return String(value || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
 
-            var userCartIcon = L.AwesomeMarkers.icon({
-                icon: 'cart-shopping',
-                prefix: 'fa',
-                markerColor: 'orange',
-                iconColor: 'white'
+    function csvEscape(value) {
+        var stringValue = String(value == null ? "" : value);
+        if (/[",\n]/.test(stringValue)) {
+            return '"' + stringValue.replace(/"/g, '""') + '"';
+        }
+        return stringValue;
+    }
+
+    function getIconConfig(iconName) {
+        return ICON_CONFIG[iconName] || ICON_CONFIG["location-dot"];
+    }
+
+    function makeIcon(iconName) {
+        var config = getIconConfig(iconName);
+        var safeIcon = escapeHtml(iconName || "location-dot");
+        return L.divIcon({
+            className: "custom-pin-wrapper",
+            html: '<div class="custom-pin-circle" style="background:' + config.color + '"><i class="fa-solid fa-' + safeIcon + '"></i></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -16]
+        });
+    }
+
+    function savePins() {
+        var pins = allPins.map(function(layer) {
+            var latlng = layer.getLatLng();
+            return {
+                lat: latlng.lat,
+                lng: latlng.lng,
+                label: layer.options.userLabel || "",
+                name: layer.options.userName || "",
+                icon: layer.options.iconName || "location-dot"
+            };
+        });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(pins));
+    }
+
+    function bindPinPopup(marker) {
+        var label = escapeHtml(marker.options.userLabel || "Untitled pin");
+        var name = escapeHtml(marker.options.userName || "Unknown");
+        var category = escapeHtml(getIconConfig(marker.options.iconName).label);
+        var markerId = L.Util.stamp(marker);
+        marker.bindPopup(
+            "<div style='min-width:180px'>" +
+            "<div style='font-weight:700; margin-bottom:4px;'>" + label + "</div>" +
+            "<div style='margin-bottom:4px;'><strong>Category:</strong> " + category + "</div>" +
+            "<div style='margin-bottom:8px;'><strong>Added by:</strong> " + name + "</div>" +
+            "<button type='button' onclick='window.editUserPin(" + markerId + ")'>Edit</button> " +
+            "<button type='button' onclick='window.deleteUserPin(" + markerId + ")'>Delete</button>" +
+            "</div>"
+        );
+    }
+
+    function applyFilter() {
+        userPinsLayer.clearLayers();
+        allPins.forEach(function(marker) {
+            if (activeFilter === "all" || marker.options.iconName === activeFilter) {
+                userPinsLayer.addLayer(marker);
+            }
+        });
+    }
+
+    function addUserPin(lat, lng, label, name, iconName) {
+        var marker = L.marker([lat, lng], {
+            draggable: true,
+            icon: makeIcon(iconName)
+        });
+
+        marker.options.userLabel = label || "";
+        marker.options.userName = name || "";
+        marker.options.iconName = iconName || "location-dot";
+
+        marker.on("dragend", function() {
+            savePins();
+        });
+
+        bindPinPopup(marker);
+        allPins.push(marker);
+        applyFilter();
+        return marker;
+    }
+
+    function loadPins() {
+        var raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+        try {
+            JSON.parse(raw).forEach(function(pin) {
+                addUserPin(pin.lat, pin.lng, pin.label, pin.name, pin.icon);
             });
+        } catch (err) {
+            console.error("Could not load saved pins", err);
+        }
+    }
 
-            function escapeHtml(str) {
-                return String(str)
-                    .replace(/&/g, "&amp;")
-                    .replace(/</g, "&lt;")
-                    .replace(/>/g, "&gt;")
-                    .replace(/\"/g, "&quot;")
-                    .replace(/'/g, "&#39;");
-            }
-
-            function saveUserPins() {
-                var pins = [];
-                user_pins_layer.eachLayer(function(layer) {
-                    var latlng = layer.getLatLng();
-                    pins.push({
-                        lat: latlng.lat,
-                        lng: latlng.lng,
-                        label: layer.options.userLabel || "",
-                        userName: layer.options.userName || ""
-                    });
-                });
-                localStorage.setItem(USER_PINS_STORAGE_KEY, JSON.stringify(pins));
-            }
-
-            function buildUserPinPopup(marker) {
-                var markerId = L.Util.stamp(marker);
-                var label = marker.options.userLabel || "Untitled pin";
-                var userName = marker.options.userName || "Anonymous";
-                return `
-                    <div style="min-width:180px; line-height:1.35;">
-                        <div style="font-weight:700; margin-bottom:4px;">${escapeHtml(label)}</div>
-                        <div style="font-size:12px; color:#555; margin-bottom:8px;">Added by: ${escapeHtml(userName)}</div>
-                        <button onclick="window.editUserPin(${markerId})">Edit</button>
-                        <button onclick="window.deleteUserPin(${markerId})" style="margin-left:6px;">Delete</button>
-                    </div>
-                `;
-            }
-
-            function addUserPin(lat, lng, label, userName) {
-                var marker = L.marker([lat, lng], {
-                    draggable: true,
-                    icon: userCartIcon
-                });
-                marker.options.userLabel = label || "";
-                marker.options.userName = userName || "";
-                marker.bindPopup(buildUserPinPopup(marker));
-
-                marker.on('dragend', function() {
-                    saveUserPins();
-                });
-
-                marker.on('popupopen', function() {
-                    marker.setPopupContent(buildUserPinPopup(marker));
-                });
-
-                marker.addTo(user_pins_layer);
-                return marker;
-            }
-
-            function loadUserPins() {
-                var saved = localStorage.getItem(USER_PINS_STORAGE_KEY);
-                if (!saved) return;
-
-                try {
-                    var pins = JSON.parse(saved);
-                    pins.forEach(function(pin) {
-                        addUserPin(
-                            pin.lat,
-                            pin.lng,
-                            pin.label || 'Untitled pin',
-                            pin.userName || 'Anonymous'
-                        );
-                    });
-                } catch (err) {
-                    console.error('Could not load saved pins:', err);
+    window.editUserPin = function(markerId) {
+        allPins.forEach(function(layer) {
+            if (L.Util.stamp(layer) === markerId) {
+                var name = prompt("Enter your name:", layer.options.userName || "");
+                if (name === null) return;
+                name = name.trim();
+                if (!name) {
+                    alert("Name is required.");
+                    return;
                 }
-            }
-
-            window.editUserPin = function(markerId) {
-                user_pins_layer.eachLayer(function(layer) {
-                    if (L.Util.stamp(layer) === markerId) {
-                        var newLabel = prompt('Edit pin label:', layer.options.userLabel || '');
-                        if (newLabel === null) return;
-                        var newUserName = prompt('Edit your name:', layer.options.userName || '');
-                        if (newUserName === null) return;
-                        layer.options.userLabel = newLabel.trim() || 'Untitled pin';
-                        layer.options.userName = newUserName.trim() || 'Anonymous';
-                        layer.setPopupContent(buildUserPinPopup(layer));
-                        saveUserPins();
-                    }
-                });
-            };
-
-            window.deleteUserPin = function(markerId) {
-                user_pins_layer.eachLayer(function(layer) {
-                    if (L.Util.stamp(layer) === markerId) {
-                        user_pins_layer.removeLayer(layer);
-                        saveUserPins();
-                    }
-                });
-            };
-
-            map_78eea8d4781fb263edd4cb8ea27b345a.on('click', function(e) {
-                if (!pinAddMode) return;
-
-                var userName = prompt('Enter your name for this pin:');
-                if (userName === null) return;
-
-                var label = prompt('Enter a label for this pin:');
+                var label = prompt("Enter a label for this pin:", layer.options.userLabel || "");
                 if (label === null) return;
-
-                addUserPin(
-                    e.latlng.lat,
-                    e.latlng.lng,
-                    label.trim() || 'Untitled pin',
-                    userName.trim() || 'Anonymous'
-                );
-                saveUserPins();
-            });
-
-            var pin_help_control = L.control({ position: 'topleft' });
-            pin_help_control.onAdd = function() {
-                var div = L.DomUtil.create('div');
-                div.innerHTML = `
-                    <div style="background:white; padding:10px 12px; border:1px solid #999; border-radius:6px; font-size:12px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,0.2); max-width:240px;">
-                        <div id="pin-toggle-button" style="display:inline-block; margin-bottom:8px; padding:6px 10px; border:1px solid #c97a00; border-radius:5px; background:white; color:#8a4b00; font-weight:600; cursor:pointer; user-select:none;">🛒 Add pins: OFF</div><br>
-                        Turn pin mode on, then click the map to add an orange shopping cart pin.<br>
-                        Each pin stores both a label and the person's name.<br>
-                        Drag pins to move them. Click a pin to edit or delete it.
-                    </div>
-                `;
-                L.DomEvent.disableClickPropagation(div);
-                return div;
-            };
-            pin_help_control.addTo(map_78eea8d4781fb263edd4cb8ea27b345a);
-
-            var pinToggleButton = document.getElementById('pin-toggle-button');
-            if (pinToggleButton) {
-                pinToggleButton.addEventListener('click', function() {
-                    pinAddMode = !pinAddMode;
-                    pinToggleButton.textContent = pinAddMode ? '🛒 Add pins: ON' : '🛒 Add pins: OFF';
-                    pinToggleButton.style.background = pinAddMode ? '#fff1df' : 'white';
-                });
+                label = label.trim();
+                if (!label) {
+                    alert("Label is required.");
+                    return;
+                }
+                layer.options.userName = name;
+                layer.options.userLabel = label;
+                bindPinPopup(layer);
+                savePins();
+                layer.openPopup();
             }
+        });
+    };
 
-            loadUserPins();
+    window.deleteUserPin = function(markerId) {
+        allPins = allPins.filter(function(layer) {
+            if (L.Util.stamp(layer) === markerId) {
+                userPinsLayer.removeLayer(layer);
+                return false;
+            }
+            return true;
+        });
+        savePins();
+        applyFilter();
+    };
+
+    map.on("click", function(e) {
+        if (!pinMode) return;
+
+        var name = prompt("Enter your name:");
+        if (name === null) return;
+        name = name.trim();
+        if (!name) {
+            alert("Name is required.");
+            return;
+        }
+
+        var label = prompt("Enter a label for this pin:");
+        if (label === null) return;
+        label = label.trim();
+        if (!label) {
+            alert("Label is required.");
+            return;
+        }
+
+        addUserPin(e.latlng.lat, e.latlng.lng, label, name, selectedIcon);
+        savePins();
+    });
+
+    var toggleBtn = document.getElementById("pinToggleBtn");
+    toggleBtn.addEventListener("click", function() {
+        pinMode = !pinMode;
+        toggleBtn.textContent = pinMode ? "ON" : "OFF";
+        toggleBtn.classList.toggle("active", pinMode);
+    });
+
+    document.querySelectorAll(".pinIcon").forEach(function(el) {
+        el.addEventListener("click", function() {
+            document.querySelectorAll(".pinIcon").forEach(function(iconEl) {
+                iconEl.classList.remove("selected");
+            });
+            el.classList.add("selected");
+            selectedIcon = el.getAttribute("data-icon");
+        });
+    });
+
+    if (filterSelect) {
+        filterSelect.addEventListener("change", function() {
+            activeFilter = filterSelect.value;
+            applyFilter();
+        });
+    }
+
+    if (downloadPinsBtn) {
+        downloadPinsBtn.addEventListener("click", function() {
+            var rows = [["name", "label", "category", "icon", "latitude", "longitude"]];
+            allPins.forEach(function(layer) {
+                var latlng = layer.getLatLng();
+                var category = getIconConfig(layer.options.iconName).label;
+                rows.push([
+                    layer.options.userName || "",
+                    layer.options.userLabel || "",
+                    category,
+                    layer.options.iconName || "location-dot",
+                    latlng.lat,
+                    latlng.lng
+                ]);
+            });
+            var csv = rows.map(function(row) {
+                return row.map(csvEscape).join(",");
+            }).join("\n");
+
+            var blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+            var url = URL.createObjectURL(blob);
+            var link = document.createElement("a");
+            link.href = url;
+            link.download = "map_pins.csv";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    var defaultIcon = document.querySelector('.pinIcon[data-icon="cart-shopping"]');
+    if (defaultIcon) defaultIcon.classList.add("selected");
+
+    [document.getElementById("mapUiWrap")].forEach(function(el) {
+        if (el) {
+            L.DomEvent.disableClickPropagation(el);
+            L.DomEvent.disableScrollPropagation(el);
+        }
+    });
+
+    searchForm.addEventListener("submit", function(event) {
+        event.preventDefault();
+        var query = searchInput.value.trim();
+        if (!query) {
+            searchStatus.textContent = "Enter an address or place.";
+            return;
+        }
+
+        searchStatus.textContent = "Searching...";
+
+        fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=" + encodeURIComponent(query), {
+            headers: {
+                "Accept": "application/json"
+            }
+        })
+            .then(function(response) {
+                if (!response.ok) throw new Error("Search failed.");
+                return response.json();
+            })
+            .then(function(results) {
+                if (!results || !results.length) {
+                    searchStatus.textContent = "No result found.";
+                    return;
+                }
+
+                var result = results[0];
+                var lat = parseFloat(result.lat);
+                var lon = parseFloat(result.lon);
+                map.setView([lat, lon], 16);
+
+                if (searchResultMarker) {
+                    map.removeLayer(searchResultMarker);
+                }
+
+                searchResultMarker = L.marker([lat, lon]).addTo(map);
+                searchResultMarker.bindPopup(escapeHtml(result.display_name)).openPopup();
+                searchStatus.textContent = result.display_name;
+            })
+            .catch(function(err) {
+                console.error(err);
+                searchStatus.textContent = "Search unavailable right now.";
+            });
+    });
+
+    loadPins();
+})();
 
 </script>
 </html>
