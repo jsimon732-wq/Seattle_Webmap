@@ -2216,5 +2216,164 @@
             ).addTo(map_78eea8d4781fb263edd4cb8ea27b345a);
 
 
+
+
+            var user_pins_layer = L.featureGroup().addTo(map_78eea8d4781fb263edd4cb8ea27b345a);
+            var USER_PINS_STORAGE_KEY = "seattle_map_user_pins";
+            var pinAddMode = false;
+
+            var userCartIcon = L.AwesomeMarkers.icon({
+                icon: 'cart-shopping',
+                prefix: 'fa',
+                markerColor: 'orange',
+                iconColor: 'white'
+            });
+
+            function escapeHtml(str) {
+                return String(str)
+                    .replace(/&/g, "&amp;")
+                    .replace(/</g, "&lt;")
+                    .replace(/>/g, "&gt;")
+                    .replace(/\"/g, "&quot;")
+                    .replace(/'/g, "&#39;");
+            }
+
+            function saveUserPins() {
+                var pins = [];
+                user_pins_layer.eachLayer(function(layer) {
+                    var latlng = layer.getLatLng();
+                    pins.push({
+                        lat: latlng.lat,
+                        lng: latlng.lng,
+                        label: layer.options.userLabel || "",
+                        userName: layer.options.userName || ""
+                    });
+                });
+                localStorage.setItem(USER_PINS_STORAGE_KEY, JSON.stringify(pins));
+            }
+
+            function buildUserPinPopup(marker) {
+                var markerId = L.Util.stamp(marker);
+                var label = marker.options.userLabel || "Untitled pin";
+                var userName = marker.options.userName || "Anonymous";
+                return `
+                    <div style="min-width:180px; line-height:1.35;">
+                        <div style="font-weight:700; margin-bottom:4px;">${escapeHtml(label)}</div>
+                        <div style="font-size:12px; color:#555; margin-bottom:8px;">Added by: ${escapeHtml(userName)}</div>
+                        <button onclick="window.editUserPin(${markerId})">Edit</button>
+                        <button onclick="window.deleteUserPin(${markerId})" style="margin-left:6px;">Delete</button>
+                    </div>
+                `;
+            }
+
+            function addUserPin(lat, lng, label, userName) {
+                var marker = L.marker([lat, lng], {
+                    draggable: true,
+                    icon: userCartIcon
+                });
+                marker.options.userLabel = label || "";
+                marker.options.userName = userName || "";
+                marker.bindPopup(buildUserPinPopup(marker));
+
+                marker.on('dragend', function() {
+                    saveUserPins();
+                });
+
+                marker.on('popupopen', function() {
+                    marker.setPopupContent(buildUserPinPopup(marker));
+                });
+
+                marker.addTo(user_pins_layer);
+                return marker;
+            }
+
+            function loadUserPins() {
+                var saved = localStorage.getItem(USER_PINS_STORAGE_KEY);
+                if (!saved) return;
+
+                try {
+                    var pins = JSON.parse(saved);
+                    pins.forEach(function(pin) {
+                        addUserPin(
+                            pin.lat,
+                            pin.lng,
+                            pin.label || 'Untitled pin',
+                            pin.userName || 'Anonymous'
+                        );
+                    });
+                } catch (err) {
+                    console.error('Could not load saved pins:', err);
+                }
+            }
+
+            window.editUserPin = function(markerId) {
+                user_pins_layer.eachLayer(function(layer) {
+                    if (L.Util.stamp(layer) === markerId) {
+                        var newLabel = prompt('Edit pin label:', layer.options.userLabel || '');
+                        if (newLabel === null) return;
+                        var newUserName = prompt('Edit your name:', layer.options.userName || '');
+                        if (newUserName === null) return;
+                        layer.options.userLabel = newLabel.trim() || 'Untitled pin';
+                        layer.options.userName = newUserName.trim() || 'Anonymous';
+                        layer.setPopupContent(buildUserPinPopup(layer));
+                        saveUserPins();
+                    }
+                });
+            };
+
+            window.deleteUserPin = function(markerId) {
+                user_pins_layer.eachLayer(function(layer) {
+                    if (L.Util.stamp(layer) === markerId) {
+                        user_pins_layer.removeLayer(layer);
+                        saveUserPins();
+                    }
+                });
+            };
+
+            map_78eea8d4781fb263edd4cb8ea27b345a.on('click', function(e) {
+                if (!pinAddMode) return;
+
+                var userName = prompt('Enter your name for this pin:');
+                if (userName === null) return;
+
+                var label = prompt('Enter a label for this pin:');
+                if (label === null) return;
+
+                addUserPin(
+                    e.latlng.lat,
+                    e.latlng.lng,
+                    label.trim() || 'Untitled pin',
+                    userName.trim() || 'Anonymous'
+                );
+                saveUserPins();
+            });
+
+            var pin_help_control = L.control({ position: 'topleft' });
+            pin_help_control.onAdd = function() {
+                var div = L.DomUtil.create('div');
+                div.innerHTML = `
+                    <div style="background:white; padding:10px 12px; border:1px solid #999; border-radius:6px; font-size:12px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,0.2); max-width:240px;">
+                        <div id="pin-toggle-button" style="display:inline-block; margin-bottom:8px; padding:6px 10px; border:1px solid #c97a00; border-radius:5px; background:white; color:#8a4b00; font-weight:600; cursor:pointer; user-select:none;">🛒 Add pins: OFF</div><br>
+                        Turn pin mode on, then click the map to add an orange shopping cart pin.<br>
+                        Each pin stores both a label and the person's name.<br>
+                        Drag pins to move them. Click a pin to edit or delete it.
+                    </div>
+                `;
+                L.DomEvent.disableClickPropagation(div);
+                return div;
+            };
+            pin_help_control.addTo(map_78eea8d4781fb263edd4cb8ea27b345a);
+
+            var pinToggleButton = document.getElementById('pin-toggle-button');
+            if (pinToggleButton) {
+                pinToggleButton.addEventListener('click', function() {
+                    pinAddMode = !pinAddMode;
+                    pinToggleButton.textContent = pinAddMode ? '🛒 Add pins: ON' : '🛒 Add pins: OFF';
+                    pinToggleButton.style.background = pinAddMode ? '#fff1df' : 'white';
+                });
+            }
+
+            loadUserPins();
+
 </script>
 </html>
