@@ -504,7 +504,15 @@
     <div id="mapUiWrap">
         <div id="mapSearchBox">
             <form id="mapSearchForm">
-                <input id="mapSearchInput" type="text" placeholder="Search address or place" aria-label="Search address or place">
+                <input
+                    id="mapSearchInput"
+                    type="text"
+                    placeholder="Search address or place"
+                    aria-label="Search address or place"
+                    list="searchSuggestions"
+                    autocomplete="off"
+                >
+                <datalist id="searchSuggestions"></datalist>
                 <button id="mapSearchBtn" type="submit">Search</button>
             </form>
             <div id="mapSearchStatus"></div>
@@ -532,9 +540,9 @@
                         <option value="location-dot">Other</option>
                     </select>
                 </label>
-                <button id="uploadPinsBtn" type="button">Upload CSV</button>
+                <button id="uploadPinsBtn" type="button">Upload Points</button>
                 <input id="uploadPinsInput" type="file" accept=".csv,text/csv">
-                <button id="downloadPinsBtn" type="button">Download CSV</button>
+                <button id="downloadPinsBtn" type="button">Download Points</button>
             </div>
             <div id="iconTypeFilterWrap">
                 <div id="iconTypeFilterTitle">Show icons</div>
@@ -2723,7 +2731,7 @@
     var downloadPinsBtn = document.getElementById("downloadPinsBtn");
     var incomeLayer = feature_group_fda2530e6ac98c89f4c64eaee4121b60;
     var labelLayer = feature_group_30fa96ee53d2382883b68be04060f113;
-    var labelZoomThreshold = 13;
+    var labelZoomThreshold = 14;
     var labelPane = map.getPane("labels");
     if (labelPane) {
         labelPane.style.transition = "opacity 0.35s ease";
