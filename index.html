@@ -3429,7 +3429,7 @@
         fetch(url, {
             signal: searchAbortController.signal,
             headers: {
-                "Accept": "application/json"
+                "Accept": "application/json",
                 "User-Agent": "Seattle-Webmap/1.0 (learning project)"
             }
         })
@@ -3495,7 +3495,7 @@
             })
             .catch(function(err) {
                 console.error(err);
-                searchStatus.textContent = ""Search temporarily unavailable. Try again in a moment.";
+                searchStatus.textContent = "Search temporarily unavailable. Try again in a moment.";
             });
     });
 
