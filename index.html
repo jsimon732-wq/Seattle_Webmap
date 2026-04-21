@@ -3231,7 +3231,7 @@
             return;
         }
 
-        addUserPin(e.latlng.lat, e.latlng.lng, label, name, selectedIcon, "My pins", getSourceColor("My pins") || getIconConfig(selectedIcon).color);
+        addUserPin(e.latlng.lat, e.latlng.lng, label, name, selectedIcon, "My pins");
         savePins();
     });
 
@@ -3368,7 +3368,17 @@
                             pinName = sourceGroup;
                         }
 
-                        addUserPin(lat, lng, String(pinLabel).trim(), String(pinName).trim(), iconName, sourceGroup);
+                        var customColor = colorIndex !== -1 ? String(row[colorIndex] || "").trim() : "";
+
+                        addUserPin(
+                            lat,
+                            lng,
+                            String(pinLabel).trim(),
+                            String(pinName).trim(),
+                            iconName,
+                            sourceGroup,
+                            customColor
+                        );
                         importedCount += 1;
                     }
 
