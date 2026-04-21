@@ -3468,45 +3468,49 @@
 
     searchForm.addEventListener("submit", function(event) {
         event.preventDefault();
+
         var query = searchInput.value.trim();
         if (!query) {
             searchStatus.textContent = "Enter an address or place.";
             return;
         }
 
-        searchStatus.textContent = "Searching...";
+        // local grocery dataset first
+        if (window.SEATTLE_GROCERY_DATA && window.SEATTLE_GROCERY_DATA.length) {
+            var lowerQuery = query.toLowerCase();
 
-        fetch("https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&bounded=1&viewbox=" + encodeURIComponent(SUGGESTION_VIEWBOX) + "&q=" + encodeURIComponent(query + ", Seattle, WA"), {
-            headers: {
-                "Accept": "application/json"
-            }
-        })
-            .then(function(response) {
-                if (!response.ok) throw new Error("Search failed.");
-                return response.json();
-            })
-            .then(function(results) {
-                if (!results || !results.length) {
-                    searchStatus.textContent = "No result found.";
-                    return;
-                }
+            var match = window.SEATTLE_GROCERY_DATA.find(function(store) {
+                var nameMatch = store.name && store.name.toLowerCase().includes(lowerQuery);
+                var addressMatch = store.address && store.address.toLowerCase().includes(lowerQuery);
+                return nameMatch || addressMatch;
+            });
 
-                var result = results[0];
-                var lat = parseFloat(result.lat);
-                var lon = parseFloat(result.lon);
-                map.setView([lat, lon], 16);
+            if (match) {
+                map.setView([match.lat, match.lon], 16);
 
-                const name = result.display_name.split(",")[0];
-                const rest = result.display_name.split(",").slice(1).join(",");
+                const name = match.name || "Grocery";
+                const rest = match.address || match.category || "";
 
                 searchStatus.innerHTML =
                     `<strong>${name}</strong><br><span style="color:#6b7280">${rest}</span>`;
 
-            })
-            .catch(function(err) {
-                console.error(err);
-                searchStatus.textContent = "Search temporarily unavailable. Try again in a moment.";
-            });
+                addUserPin(
+                    match.lat,
+                    match.lon,
+                    match.name,
+                    match.address || match.category || "Grocery",
+                    "cart-shopping",
+                    "Grocery dataset"
+                );
+
+                return;
+            }
+
+            searchStatus.textContent = "No grocery match found.";
+            return;
+        }
+
+        searchStatus.textContent = "Grocery dataset not loaded yet.";
     });
 
     function updateIncomeLegendVisibility() {
