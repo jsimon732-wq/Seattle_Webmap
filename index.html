@@ -3411,60 +3411,59 @@
     });
 
 
-    function renderSuggestions(items) {
-        if (!suggestionList) return;
-        suggestionList.innerHTML = "";
-        (items || []).slice(0, 8).forEach(function(item) {
-            var option = document.createElement("option");
-            option.value = item.display_name;
-            suggestionList.appendChild(option);
-        });
-    }
-
-    function fetchSuggestions(query) {
-        if (!query || query.trim().length < 2) {
-            renderSuggestions([]);
-            return;
-        }
-
-        if (searchAbortController) {
-            searchAbortController.abort();
-        }
-        searchAbortController = new AbortController();
-
-        var url = "https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&addressdetails=1" +
-            "&bounded=1&viewbox=" + encodeURIComponent(SUGGESTION_VIEWBOX) +
-            "&q=" + encodeURIComponent(query + ", Seattle, WA");
-
-        fetch(url, {
-            signal: searchAbortController.signal,
-            headers: {
-                "Accept": "application/json",
-                "User-Agent": "Seattle-Webmap/1.0 (learning project)"
-            }
-        })
+    function loadSeattleGroceries(jsonUrl) {
+        return fetch(jsonUrl)
             .then(function(response) {
-                if (!response.ok) throw new Error("Suggestion search failed.");
+                if (!response.ok) {
+                    throw new Error("Could not load grocery dataset");
+                }
                 return response.json();
             })
-            .then(function(results) {
-                renderSuggestions(results || []);
-            })
-            .catch(function(err) {
-                if (err && err.name === "AbortError") return;
-                console.error(err);
+            .then(function(data) {
+                window.SEATTLE_GROCERY_DATA = data.stores || [];
+                return window.SEATTLE_GROCERY_DATA;
             });
     }
 
-
-    if (searchInput) {
-        searchInput.addEventListener("input", function() {
-            updateLocalGrocerySuggestions(searchInput.value);
-        });
-        searchInput.addEventListener("focus", function() {
-            updateLocalGrocerySuggestions(searchInput.value);
-        });
+    function normalizeGroceryText(value) {
+        return (value || "")
+            .toLowerCase()
+            .trim()
+            .replace(/market/g, "")
+            .replace(/community/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
     }
+
+    function filterGroceries(query, groceries, limit) {
+        var q = normalizeGroceryText(query);
+        if (!q) return [];
+        limit = limit || 8;
+
+        return groceries
+            .map(function(store) {
+                var name = normalizeGroceryText(store.name);
+                var address = normalizeGroceryText(store.address);
+                var category = normalizeGroceryText(store.category);
+                var score = -1;
+
+                if (name === q) score = 100;
+                else if (name.indexOf(q) === 0) score = 80;
+                else if (name.indexOf(q) !== -1) score = 60;
+                else if (address.indexOf(q) !== -1) score = 40;
+                else if (category.indexOf(q) !== -1) score = 20;
+
+                return { store: store, score: score };
+            })
+            .filter(function(item) { return item.score >= 0; })
+            .sort(function(a, b) {
+                if (b.score !== a.score) return b.score - a.score;
+                return (a.store.name || "").localeCompare(b.store.name || "");
+            })
+            .slice(0, limit)
+            .map(function(item) { return item.store; });
+    }
+
     function updateLocalGrocerySuggestions(query) {
         var datalist = document.getElementById("searchSuggestions");
         if (!datalist) return;
@@ -3475,22 +3474,13 @@
             return;
         }
 
-        var q = (query || "").trim().toLowerCase();
-        if (!q) return;
-
-        var matches = window.SEATTLE_GROCERY_DATA.filter(function(store) {
-            var nameMatch = store.name && store.name.toLowerCase().includes(q);
-            var addressMatch = store.address && store.address.toLowerCase().includes(q);
-            var categoryMatch = store.category && store.category.toLowerCase().includes(q);
-            return nameMatch || addressMatch || categoryMatch;
-        }).slice(0, 8);
-
-        matches.forEach(function(store) {
+        var results = filterGroceries(query, window.SEATTLE_GROCERY_DATA, 8);
+        results.forEach(function(store) {
             var option = document.createElement("option");
             option.value = store.name;
             option.label = store.address
-                ? store.name + " — " + store.address
-                : store.name;
+                ? store.name + " — " + (store.category || "Grocery") + " — " + store.address
+                : store.name + " — " + (store.category || "Grocery");
             datalist.appendChild(option);
         });
     }
@@ -3500,22 +3490,40 @@
             return null;
         }
 
-        var q = query.trim().toLowerCase();
+        var q = normalizeGroceryText(query);
+        if (!q) return null;
 
-        var exact = window.SEATTLE_GROCERY_DATA.find(function(store) {
-            return store.name && store.name.toLowerCase() === q;
+        var match = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return normalizeGroceryText(store.name) === q;
         });
-        if (exact) return exact;
+        if (match) return match;
 
-        var partial = window.SEATTLE_GROCERY_DATA.find(function(store) {
-            var nameMatch = store.name && store.name.toLowerCase().includes(q);
-            var addressMatch = store.address && store.address.toLowerCase().includes(q);
-            return nameMatch || addressMatch;
+        match = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return normalizeGroceryText(store.name).indexOf(q) === 0;
         });
+        if (match) return match;
 
-        return partial || null;
+        match = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return normalizeGroceryText(store.name).indexOf(q) !== -1;
+        });
+        if (match) return match;
+
+        match = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return normalizeGroceryText(store.address).indexOf(q) !== -1;
+        });
+        if (match) return match;
+
+        return null;
     }
 
+    if (searchInput) {
+        searchInput.addEventListener("input", function() {
+            updateLocalGrocerySuggestions(searchInput.value);
+        });
+        searchInput.addEventListener("focus", function() {
+            updateLocalGrocerySuggestions(searchInput.value);
+        });
+    }
 
     searchForm.addEventListener("submit", function(event) {
         event.preventDefault();
@@ -3539,7 +3547,7 @@
         var rest = match.address || match.category || "";
 
         searchStatus.innerHTML =
-            `<strong>${name}</strong><br><span style="color:#6b7280">${rest}</span>`;
+            "<strong>" + name + "</strong><br><span style='color:#6b7280'>" + rest + "</span>";
 
         addUserPin(
             match.lat,
@@ -3550,6 +3558,14 @@
             "Seattle grocery dataset"
         );
     });
+
+    loadSeattleGroceries("./seattle_groceries.json")
+        .then(function(data) {
+            console.log("Loaded grocery dataset:", data.length);
+        })
+        .catch(function(err) {
+            console.error("Grocery dataset failed to load:", err);
+        });
 
     function updateIncomeLegendVisibility() {
         var legendEl = document.querySelector('.income-legend');
@@ -3587,11 +3603,5 @@
   })();
   </script>
 
-
-  <script src="./grocery-search.js"></script>
-
-  <script>
-  loadSeattleGroceries("./seattle_groceries.json");
-  </script>
 
   </html>
