@@ -3459,58 +3459,96 @@
 
     if (searchInput) {
         searchInput.addEventListener("input", function() {
-            fetchSuggestions(searchInput.value);
+            updateLocalGrocerySuggestions(searchInput.value);
         });
         searchInput.addEventListener("focus", function() {
-            fetchSuggestions(searchInput.value);
+            updateLocalGrocerySuggestions(searchInput.value);
         });
     }
+    function updateLocalGrocerySuggestions(query) {
+        var datalist = document.getElementById("searchSuggestions");
+        if (!datalist) return;
+
+        datalist.innerHTML = "";
+
+        if (!window.SEATTLE_GROCERY_DATA || !window.SEATTLE_GROCERY_DATA.length) {
+            return;
+        }
+
+        var q = (query || "").trim().toLowerCase();
+        if (!q) return;
+
+        var matches = window.SEATTLE_GROCERY_DATA.filter(function(store) {
+            var nameMatch = store.name && store.name.toLowerCase().includes(q);
+            var addressMatch = store.address && store.address.toLowerCase().includes(q);
+            var categoryMatch = store.category && store.category.toLowerCase().includes(q);
+            return nameMatch || addressMatch || categoryMatch;
+        }).slice(0, 8);
+
+        matches.forEach(function(store) {
+            var option = document.createElement("option");
+            option.value = store.name;
+            option.label = store.address
+                ? store.name + " — " + store.address
+                : store.name;
+            datalist.appendChild(option);
+        });
+    }
+
+    function findLocalGroceryMatch(query) {
+        if (!window.SEATTLE_GROCERY_DATA || !window.SEATTLE_GROCERY_DATA.length) {
+            return null;
+        }
+
+        var q = query.trim().toLowerCase();
+
+        var exact = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return store.name && store.name.toLowerCase() === q;
+        });
+        if (exact) return exact;
+
+        var partial = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            var nameMatch = store.name && store.name.toLowerCase().includes(q);
+            var addressMatch = store.address && store.address.toLowerCase().includes(q);
+            return nameMatch || addressMatch;
+        });
+
+        return partial || null;
+    }
+
 
     searchForm.addEventListener("submit", function(event) {
         event.preventDefault();
 
         var query = searchInput.value.trim();
         if (!query) {
-            searchStatus.textContent = "Enter an address or place.";
+            searchStatus.textContent = "Enter a grocery store name.";
             return;
         }
 
-        // local grocery dataset first
-        if (window.SEATTLE_GROCERY_DATA && window.SEATTLE_GROCERY_DATA.length) {
-            var lowerQuery = query.toLowerCase();
+        var match = findLocalGroceryMatch(query);
 
-            var match = window.SEATTLE_GROCERY_DATA.find(function(store) {
-                var nameMatch = store.name && store.name.toLowerCase().includes(lowerQuery);
-                var addressMatch = store.address && store.address.toLowerCase().includes(lowerQuery);
-                return nameMatch || addressMatch;
-            });
-
-            if (match) {
-                map.setView([match.lat, match.lon], 16);
-
-                const name = match.name || "Grocery";
-                const rest = match.address || match.category || "";
-
-                searchStatus.innerHTML =
-                    `<strong>${name}</strong><br><span style="color:#6b7280">${rest}</span>`;
-
-                addUserPin(
-                    match.lat,
-                    match.lon,
-                    match.name,
-                    match.address || match.category || "Grocery",
-                    "cart-shopping",
-                    "Grocery dataset"
-                );
-
-                return;
-            }
-
+        if (!match) {
             searchStatus.textContent = "No grocery match found.";
             return;
         }
 
-        searchStatus.textContent = "Grocery dataset not loaded yet.";
+        map.setView([match.lat, match.lon], 16);
+
+        var name = match.name || "Grocery";
+        var rest = match.address || match.category || "";
+
+        searchStatus.innerHTML =
+            `<strong>${name}</strong><br><span style="color:#6b7280">${rest}</span>`;
+
+        addUserPin(
+            match.lat,
+            match.lon,
+            match.name,
+            match.address || match.category || "Grocery",
+            "cart-shopping",
+            "Grocery dataset"
+        );
     });
 
     function updateIncomeLegendVisibility() {
@@ -3552,38 +3590,5 @@
 
   <script src="./grocery-search.js"></script>
 
-  <script>
-
-  createSeattleGrocerySearch({
-
-      jsonUrl: "./seattle_groceries.json",
-
-      inputId: "mapSearchInput",
-
-      datalistId: "searchSuggestions",
-
-      statusId: "mapSearchStatus",
-
-      onSelect: (store) => {
-
-          map_78eea8d4781fb263edd4cb8ea27b345a.flyTo(
-              [store.lat, store.lon],
-              16
-          );
-
-          addUserPin(
-              store.lat,
-              store.lon,
-              store.name,
-              store.address || store.category || "Grocery",
-              "cart-shopping",
-              "Grocery dataset"
-          );
-
-      }
-
-  });
-
-  </script>
 
   </html>
