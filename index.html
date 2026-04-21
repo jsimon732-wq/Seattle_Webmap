@@ -624,7 +624,7 @@
   "subdomains": "abcd",
   "detectRetina": false,
   "tms": false,
-  "opacity": .50,
+  "opacity": .8,
 }
 
             );
@@ -3542,7 +3542,44 @@
     loadPins();
     updateLabelVisibility();
     updateIncomeLegendVisibility();
-})();
+  })();
+  </script>
 
-</script>
-</html>
+
+  <script src="./grocery-search.js"></script>
+
+  <script>
+
+  createSeattleGrocerySearch({
+
+      jsonUrl: "./seattle_groceries.json",
+
+      inputId: "mapSearchInput",
+
+      datalistId: "searchSuggestions",
+
+      statusId: "mapSearchStatus",
+
+      onSelect: (store) => {
+
+          map_78eea8d4781fb263edd4cb8ea27b345a.flyTo(
+              [store.lat, store.lon],
+              16
+          );
+
+          addUserPin(
+              store.lat,
+              store.lon,
+              store.name,
+              store.address || store.category || "Grocery",
+              "cart-shopping",
+              "Grocery dataset"
+          );
+
+      }
+
+  });
+
+  </script>
+
+  </html>
