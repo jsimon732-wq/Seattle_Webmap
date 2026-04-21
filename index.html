@@ -452,6 +452,23 @@
         line-height: 1;
     }
 
+    #deleteAllPointsBtn {
+        display: block;
+        margin-top: 8px;
+        font-size: 11px;
+        color: #6b7280;
+        background: transparent;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    #deleteAllPointsBtn:hover {
+        color: #b91c1c;
+        text-decoration: underline;
+    }
+
     #mapSearchForm {
         display: flex;
         gap: 8px;
@@ -570,6 +587,7 @@
                 <button class="pinIcon" type="button" data-icon="bus" data-label="Bus Stop" aria-label="Bus Stop"><i class="fa-solid fa-bus"></i></button>
                 <button class="pinIcon" type="button" data-icon="location-dot" data-label="Other" aria-label="Other"><i class="fa-solid fa-location-dot"></i></button>
             </div>
+            <button id="deleteAllPointsBtn" type="button">Delete all points</button>
         </div>
     </div>
 
@@ -2727,6 +2745,7 @@
     var searchResultMarker = null;
     var suggestionList = document.getElementById("searchSuggestions");
     var searchAbortController = null;
+    var grocerySuggestionLookup = {};
     var SUGGESTION_BBOX = "-122.4597,47.4956,-122.2244,47.7341";
     var SUGGESTION_VIEWBOX = "-122.4597,47.7341,-122.2244,47.4956";
     var filterSelect = document.getElementById("pinFilterSelect");
@@ -2735,6 +2754,7 @@
     var sourceLegendList = document.getElementById("pinSourceLegendList");
     var iconTypeFilterList = document.getElementById("iconTypeFilterList");
     var downloadPinsBtn = document.getElementById("downloadPinsBtn");
+    var deleteAllPointsBtn = document.getElementById("deleteAllPointsBtn");
     var incomeLayer = feature_group_fda2530e6ac98c89f4c64eaee4121b60;
     var labelLayer = feature_group_30fa96ee53d2382883b68be04060f113;
     var labelZoomThreshold = 14;
@@ -3172,6 +3192,35 @@
         }
     }
 
+    function deleteAllPoints() {
+        if (!allPins.length) {
+            searchStatus.textContent = "No points to delete.";
+            rebuildSourceLegend();
+            applyFilter();
+            return;
+        }
+
+        if (!confirm("Delete every point added to the map?")) {
+            return;
+        }
+
+        allPins.forEach(function(layer) {
+            userPinsLayer.removeLayer(layer);
+        });
+        allPins = [];
+        activeSourceFilters = {};
+        savePins();
+        rebuildSourceLegend();
+        applyFilter();
+        searchStatus.textContent = "All points deleted.";
+    }
+
+    if (deleteAllPointsBtn) {
+        deleteAllPointsBtn.addEventListener("click", function() {
+            deleteAllPoints();
+        });
+    }
+
     window.editUserPin = function(markerId) {
         allPins.forEach(function(layer) {
             if (L.Util.stamp(layer) === markerId) {
@@ -3473,33 +3522,41 @@
             searchForm.dispatchEvent(submitEvent);
         });
     }
+
+    function buildGrocerySuggestionValue(store) {
+        var name = String((store && store.name) || "").trim();
+        var address = String((store && store.address) || "").trim();
+        return address ? (name + " — " + address) : name;
+    }
+
     function updateLocalGrocerySuggestions(query) {
         var datalist = document.getElementById("searchSuggestions");
         if (!datalist) return;
 
         datalist.innerHTML = "";
+        grocerySuggestionLookup = {};
 
         if (!window.SEATTLE_GROCERY_DATA || !window.SEATTLE_GROCERY_DATA.length) {
             return;
         }
 
-        var q = (query || "").trim().toLowerCase();
+        var q = normalizeGroceryText(query);
         if (!q) return;
 
         var matches = window.SEATTLE_GROCERY_DATA.filter(function(store) {
-            var nameMatch = store.name && store.name.toLowerCase().includes(q);
-            var addressMatch = store.address && store.address.toLowerCase().includes(q);
-            var categoryMatch = store.category && store.category.toLowerCase().includes(q);
+            var nameMatch = normalizeGroceryText(store.name).includes(q);
+            var addressMatch = normalizeGroceryText(store.address).includes(q);
+            var categoryMatch = normalizeGroceryText(store.category).includes(q);
             return nameMatch || addressMatch || categoryMatch;
         }).slice(0, 8);
 
         matches.forEach(function(store) {
             var option = document.createElement("option");
-            option.value = store.name;
-            option.label = store.address
-                ? store.name + " — " + store.address
-                : store.name;
+            var suggestionValue = buildGrocerySuggestionValue(store);
+            option.value = suggestionValue;
+            option.label = suggestionValue;
             datalist.appendChild(option);
+            grocerySuggestionLookup[suggestionValue] = store;
         });
     }
 
@@ -3518,8 +3575,16 @@
             return null;
         }
 
+        var directSuggestionMatch = grocerySuggestionLookup[query];
+        if (directSuggestionMatch) return directSuggestionMatch;
+
         var q = normalizeGroceryText(query);
         if (!q) return null;
+
+        var exactSuggestion = window.SEATTLE_GROCERY_DATA.find(function(store) {
+            return normalizeGroceryText(buildGrocerySuggestionValue(store)) === q;
+        });
+        if (exactSuggestion) return exactSuggestion;
 
         var exact = window.SEATTLE_GROCERY_DATA.find(function(store) {
             return normalizeGroceryText(store.name) === q;
