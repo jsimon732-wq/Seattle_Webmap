@@ -469,6 +469,93 @@
         text-decoration: underline;
     }
 
+    #showGroceriesBtn {
+        position: fixed;
+        left: 10px;
+        bottom: 52px;
+        z-index: 9999;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 46px;
+        border: 1px solid #b8b8b8;
+        background: rgba(255, 255, 255, 0.97);
+        color: #374151;
+        border-radius: 999px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+    }
+
+    #showGroceriesBtn:hover {
+        transform: translateY(-1px);
+        background: #f8fafc;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.18);
+    }
+
+    #showGroceriesBtn.active {
+        background: #fff7ed;
+        border-color: #c2410c;
+        color: #9a3412;
+    }
+
+    #showGroceriesBtn:disabled {
+        opacity: 0.65;
+        cursor: wait;
+    }
+
+    .grocery-toggle-track {
+        width: 34px;
+        height: 20px;
+        border-radius: 999px;
+        background: #d1d5db;
+        position: relative;
+        flex: 0 0 auto;
+        transition: background 0.12s ease;
+    }
+
+    .grocery-toggle-knob {
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        transition: transform 0.12s ease;
+    }
+
+    #showGroceriesBtn.active .grocery-toggle-track {
+        background: #c2410c;
+    }
+
+    #showGroceriesBtn.active .grocery-toggle-knob {
+        transform: translateX(14px);
+    }
+
+    .grocery-toggle-label {
+        white-space: nowrap;
+    }
+
+    .grocery-toggle-state {
+        font-size: 11px;
+        line-height: 1;
+        border-radius: 999px;
+        padding: 4px 7px;
+        background: #f3f4f6;
+        color: #6b7280;
+        letter-spacing: 0.02em;
+    }
+
+    #showGroceriesBtn.active .grocery-toggle-state {
+        background: #fdba74;
+        color: #7c2d12;
+    }
+
     #mapSearchForm {
         display: flex;
         gap: 8px;
@@ -592,6 +679,7 @@
     </div>
 
             <div class="folium-map" id="map_78eea8d4781fb263edd4cb8ea27b345a" ></div>
+            <button id="showGroceriesBtn" type="button" aria-pressed="false"><span class="grocery-toggle-track"><span class="grocery-toggle-knob"></span></span><span class="grocery-toggle-label">Show grocery stores</span><span class="grocery-toggle-state">OFF</span></button>
 
 </body>
 <script>
@@ -2755,6 +2843,10 @@
     var iconTypeFilterList = document.getElementById("iconTypeFilterList");
     var downloadPinsBtn = document.getElementById("downloadPinsBtn");
     var deleteAllPointsBtn = document.getElementById("deleteAllPointsBtn");
+    var showGroceriesBtn = document.getElementById("showGroceriesBtn");
+    var groceryOverlayLayer = L.layerGroup().addTo(map);
+    var groceryOverlayVisible = false;
+    var groceryDataPromise = null;
     var incomeLayer = feature_group_fda2530e6ac98c89f4c64eaee4121b60;
     var labelLayer = feature_group_30fa96ee53d2382883b68be04060f113;
     var labelZoomThreshold = 14;
@@ -3098,6 +3190,127 @@
         }
     }
 
+    function getGroceryOutlineColor(shopType) {
+        var normalized = String(shopType || "").trim().toLowerCase();
+        if (normalized === "convenience") return "#9ca3af";
+        if (normalized === "supermarket" || normalized === "greengrocer") return "#c2410c";
+        return "#c2410c";
+    }
+
+    function makeGroceryOverlayIcon(shopType) {
+        return L.divIcon({
+            className: "custom-pin-wrapper grocery-overlay-pin",
+            html: '<div class="custom-pin-circle" style="background:#f4b400;border:2px solid ' + getGroceryOutlineColor(shopType) + ';opacity:0.96"><i class="fa-solid fa-cart-shopping"></i></div>',
+            iconSize: [34, 34],
+            iconAnchor: [17, 17],
+            popupAnchor: [0, -16]
+        });
+    }
+
+    function setExistingPinsOpacity(opacityValue) {
+        allPins.forEach(function(marker) {
+            marker.setOpacity(opacityValue);
+        });
+    }
+
+    function updateGroceryButtonState() {
+        if (!showGroceriesBtn) return;
+        showGroceriesBtn.classList.toggle("active", groceryOverlayVisible);
+        showGroceriesBtn.setAttribute("aria-pressed", groceryOverlayVisible ? "true" : "false");
+        var labelEl = showGroceriesBtn.querySelector(".grocery-toggle-label");
+        var stateEl = showGroceriesBtn.querySelector(".grocery-toggle-state");
+        if (labelEl) {
+            labelEl.textContent = "Show grocery stores";
+        }
+        if (stateEl) {
+            stateEl.textContent = groceryOverlayVisible ? "ON" : "OFF";
+        }
+    }
+
+    function clearGroceryOverlay() {
+        groceryOverlayLayer.clearLayers();
+        groceryOverlayVisible = false;
+        setExistingPinsOpacity(1);
+        updateGroceryButtonState();
+    }
+
+    function buildGroceryPopup(store) {
+        var name = escapeHtml(store.name || "Grocery Store");
+        var category = escapeHtml(store.category || "Grocery");
+        var shopType = escapeHtml(store.shop_type || "");
+        var address = escapeHtml(store.address || "");
+        return "<div style='min-width:200px'>" +
+            "<div style='font-weight:700; margin-bottom:4px;'>" + name + "</div>" +
+            "<div style='margin-bottom:4px;'><strong>Category:</strong> " + category + "</div>" +
+            "<div style='margin-bottom:4px;'><strong>Type:</strong> " + shopType + "</div>" +
+            (address ? "<div><strong>Address:</strong> " + address + "</div>" : "") +
+            "</div>";
+    }
+
+    function renderGroceryOverlay(stores) {
+        groceryOverlayLayer.clearLayers();
+        (stores || []).forEach(function(store) {
+            if (typeof store.lat !== "number" || typeof store.lon !== "number") {
+                return;
+            }
+            var marker = L.marker([store.lat, store.lon], {
+                icon: makeGroceryOverlayIcon(store.shop_type),
+                keyboard: false
+            });
+            marker.bindPopup(buildGroceryPopup(store));
+            groceryOverlayLayer.addLayer(marker);
+        });
+        groceryOverlayVisible = true;
+        setExistingPinsOpacity(0.18);
+        updateGroceryButtonState();
+    }
+
+    function ensureGroceryDataLoaded() {
+        if (window.SEATTLE_GROCERY_DATA && window.SEATTLE_GROCERY_DATA.length) {
+            return Promise.resolve(window.SEATTLE_GROCERY_DATA);
+        }
+        if (groceryDataPromise) {
+            return groceryDataPromise;
+        }
+        groceryDataPromise = fetch("./seattle_groceries.json", {
+            headers: { "Accept": "application/json" }
+        })
+            .then(function(response) {
+                if (!response.ok) throw new Error("Could not load grocery data.");
+                return response.json();
+            })
+            .then(function(payload) {
+                window.SEATTLE_GROCERY_DATA = Array.isArray(payload) ? payload : ((payload && payload.stores) || []);
+                return window.SEATTLE_GROCERY_DATA;
+            });
+        return groceryDataPromise;
+    }
+
+    function toggleGroceryOverlay() {
+        if (groceryOverlayVisible) {
+            clearGroceryOverlay();
+            searchStatus.textContent = "Grocery overlay hidden.";
+            return;
+        }
+        if (showGroceriesBtn) {
+            showGroceriesBtn.disabled = true;
+        }
+        ensureGroceryDataLoaded()
+            .then(function(stores) {
+                renderGroceryOverlay(stores);
+                searchStatus.textContent = "Showing all grocery stores.";
+            })
+            .catch(function(err) {
+                console.error(err);
+                searchStatus.textContent = "Could not load grocery stores.";
+            })
+            .finally(function() {
+                if (showGroceriesBtn) {
+                    showGroceriesBtn.disabled = false;
+                }
+            });
+    }
+
     function makeIcon(iconName, customColor) {
         var safeIcon = escapeHtml(iconName || "location-dot");
         var pinColor = getPinColor(iconName, customColor);
@@ -3155,6 +3368,7 @@
                 userPinsLayer.addLayer(marker);
             }
         });
+        setExistingPinsOpacity(groceryOverlayVisible ? 0.18 : 1);
     }
 
     function addUserPin(lat, lng, label, name, iconName, sourceGroup, customColor) {
@@ -3193,7 +3407,10 @@
     }
 
     function deleteAllPoints() {
-        if (!allPins.length) {
+        var hasUserPins = allPins.length > 0;
+        var hasGroceries = groceryOverlayVisible || groceryOverlayLayer.getLayers().length > 0;
+
+        if (!hasUserPins && !hasGroceries) {
             searchStatus.textContent = "No points to delete.";
             rebuildSourceLegend();
             applyFilter();
@@ -3209,6 +3426,7 @@
         });
         allPins = [];
         activeSourceFilters = {};
+        clearGroceryOverlay();
         savePins();
         rebuildSourceLegend();
         applyFilter();
@@ -3219,6 +3437,13 @@
         deleteAllPointsBtn.addEventListener("click", function() {
             deleteAllPoints();
         });
+    }
+
+    if (showGroceriesBtn) {
+        showGroceriesBtn.addEventListener("click", function() {
+            toggleGroceryOverlay();
+        });
+        updateGroceryButtonState();
     }
 
     window.editUserPin = function(markerId) {
@@ -3677,11 +3902,22 @@
   </script>
 
 
-  <script src="./grocery-search.js"></script>
   <script>
-    loadSeattleGroceries("./seattle_groceries.json").catch(function(err) {
-      console.error("Could not load grocery dataset:", err);
-    });
+    (function() {
+      fetch("./seattle_groceries.json", {
+        headers: { "Accept": "application/json" }
+      })
+        .then(function(response) {
+          if (!response.ok) throw new Error("Could not load grocery dataset.");
+          return response.json();
+        })
+        .then(function(payload) {
+          window.SEATTLE_GROCERY_DATA = Array.isArray(payload) ? payload : ((payload && payload.stores) || []);
+        })
+        .catch(function(err) {
+          console.error("Could not load grocery dataset:", err);
+        });
+    })();
   </script>
 
 
