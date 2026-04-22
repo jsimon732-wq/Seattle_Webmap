@@ -452,6 +452,17 @@
         line-height: 1;
     }
 
+    .grocery-overlay-circle {
+        background: #f4b400;
+        opacity: 0.96;
+        transition: opacity 0.16s ease, filter 0.16s ease;
+    }
+
+    .grocery-overlay-circle.is-convenience {
+        opacity: 0.5;
+        filter: saturate(0.72) brightness(0.98);
+    }
+
     #deleteAllPointsBtn {
         display: block;
         margin-top: 8px;
@@ -3198,9 +3209,11 @@
     }
 
     function makeGroceryOverlayIcon(shopType) {
+        var normalized = String(shopType || "").trim().toLowerCase();
+        var convenienceClass = normalized === "convenience" ? " is-convenience" : "";
         return L.divIcon({
             className: "custom-pin-wrapper grocery-overlay-pin",
-            html: '<div class="custom-pin-circle" style="background:#f4b400;border:2px solid ' + getGroceryOutlineColor(shopType) + ';opacity:0.96"><i class="fa-solid fa-cart-shopping"></i></div>',
+            html: '<div class="custom-pin-circle grocery-overlay-circle' + convenienceClass + '" style="border:2px solid ' + getGroceryOutlineColor(shopType) + '"><i class="fa-solid fa-cart-shopping"></i></div>',
             iconSize: [34, 34],
             iconAnchor: [17, 17],
             popupAnchor: [0, -16]
